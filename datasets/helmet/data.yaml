@@ -1,0 +1,7 @@
+names:
+  0: no_helmet
+  1: helmet
+nc: 2
+path: D:\usual\document\1demo_lib\windows\python\cursor\yolo8_10_all\datasets\helmet
+train: images/train
+val: images/val

@@ -1,0 +1,45 @@
+# 全局配置
+project_root: .
+device: auto  # auto | cpu | cuda:0
+
+# YOLO 版本: yolov5 | yolov8 | yolov10
+default_yolo_version: yolov8
+
+# 训练默认参数
+train:
+  epochs: 20
+  batch: 8
+  imgsz: 640
+  patience: 10
+  workers: 4
+
+# 推理默认参数
+infer:
+  conf: 0.25
+  iou: 0.45
+
+# 路径
+paths:
+  datasets: datasets
+  weights: weights
+  runs: runs
+  face_gallery: datasets/face/gallery
+  custom_data: datasets/custom
+
+# 任务定义
+tasks:
+  helmet:
+    type: detection
+    classes: [no_helmet, helmet]
+    default_weights: yolov8n.pt
+  plate:
+    type: detection
+    classes: [plate]
+    default_weights: yolov8n.pt
+  action:
+    type: detection
+    classes: [normal, smoking, fighting, falling]
+    default_weights: yolov8n.pt
+  face:
+    type: recognition
+    model: buffalo_l

@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+*.egg-info/
+
+# Models & runs
+weights/
+runs/
+outputs/
+*.pt
+*.onnx
+*.rknn
+
+# Data (large)
+datasets/face/lfw/
+datasets/face/lfw.tgz
+datasets/**/images/
+datasets/**/labels/
+
+# IDE
+.vscode/
+.idea/
+
+# InsightFace / Paddle cache
+.insightface/
+.paddlex/
+
+# OS
+Thumbs.db
+.DS_Store

@@ -1,0 +1,7 @@
+task: face
+type: recognition
+description: 人脸识别
+model: buffalo_l
+gallery: datasets/face/gallery
+det_threshold: 0.5
+rec_threshold: 0.4

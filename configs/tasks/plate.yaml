@@ -1,0 +1,8 @@
+task: plate
+type: detection
+description: 车牌检测
+classes:
+  0: plate
+dataset: datasets/plate/data.yaml
+default_weights: yolov8n.pt
+ocr_engine: paddleocr

@@ -1,0 +1,8 @@
+task: helmet
+type: detection
+description: 安全帽检测
+classes:
+  0: no_helmet
+  1: helmet
+dataset: datasets/helmet/data.yaml
+default_weights: yolov8n.pt
