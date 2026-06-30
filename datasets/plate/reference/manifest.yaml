@@ -1,0 +1,60 @@
+- bbox:
+  - 0
+  - 0.5
+  - 0.7958333333333333
+  - 0.3125
+  - 0.09166666666666666
+  generator: scene_rear
+  name: plate_local_scene_rear
+  note: 本地精确标注
+  split: train
+- bbox:
+  - 0
+  - 0.5
+  - 0.85
+  - 0.21875
+  - 0.075
+  generator: scene_front
+  name: plate_local_scene_front
+  note: 本地精确标注
+  split: train
+- bbox:
+  - 0
+  - 0.5
+  - 0.5
+  - 0.92
+  - 0.85
+  generator: closeup
+  name: plate_local_closeup_blue
+  note: 本地精确标注
+  split: train
+- bbox:
+  - 0
+  - 0.5
+  - 0.7958333333333333
+  - 0.3125
+  - 0.09166666666666666
+  generator: scene_rear
+  name: plate_local_scene_rear2
+  note: 本地精确标注
+  split: train
+- bbox:
+  - 0
+  - 0.5
+  - 0.5
+  - 0.92
+  - 0.85
+  generator: closeup
+  name: plate_local_closeup2
+  note: 本地精确标注
+  split: val
+- bbox:
+  - 0
+  - 0.5
+  - 0.85
+  - 0.21875
+  - 0.075
+  generator: scene_front
+  name: plate_local_scene_front2
+  note: 本地精确标注
+  split: val

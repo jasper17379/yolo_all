@@ -1,35 +1,47 @@
-"""人脸库构建 - 从 LFW 等数据集初始化 gallery"""
+"""
+人脸库构建 - 从 LFW 等数据集初始化 gallery。
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import cv2
-
-from src.core.config import PROJECT_ROOT, resolve_path
+from src.core.config import resolve_path
+from src.core.third_party_paths import bootstrap_env, insightface_model_dir
 from src.tasks.face_recognition import FaceRecognizer
 
 
-def train_face_gallery(max_persons: int | None = None) -> dict:
-    """从 datasets/face/lfw 构建初始人脸库。max_persons=None 时录入全部。"""
+def train_face_gallery(max_persons: int | None = None, max_images_per_person: int = 20) -> dict:
+    """从 datasets/face/lfw 构建初始人脸库。"""
+    bootstrap_env()
     lfw_dir = resolve_path("datasets/face/lfw")
-    rec = FaceRecognizer()
-    enrolled = 0
-    failed = 0
-
     if not lfw_dir.exists():
-        return {"task": "face", "message": "LFW 数据集未下载，请先运行 download_datasets.py", "enrolled": 0}
+        return {
+            "task": "face",
+            "message": "LFW 数据集未下载，请先运行: python scripts/import_external_datasets.py 或 download_datasets.py",
+            "enrolled": 0,
+        }
 
     persons = sorted([d for d in lfw_dir.iterdir() if d.is_dir()])
+    if not persons:
+        return {"task": "face", "message": f"未找到人脸子目录: {lfw_dir}", "enrolled": 0}
     if max_persons is not None:
         persons = persons[:max_persons]
 
-    for person_dir in persons:
-        result = rec.enroll_from_dir(person_dir)
+    rec = FaceRecognizer()
+    enrolled = 0
+    failed = 0
+    total = len(persons)
+
+    for i, person_dir in enumerate(persons, 1):
+        print(f"[face] 录入 {i}/{total}: {person_dir.name}")
+        result = rec.enroll_from_dir(person_dir, max_images=max_images_per_person)
         if result["success"]:
             enrolled += 1
+            print(f"  -> ok ({result.get('count', 0)} 张)")
         else:
             failed += 1
+            print(f"  -> 失败")
 
     return {
         "task": "face",
@@ -42,12 +54,13 @@ def train_face_gallery(max_persons: int | None = None) -> dict:
         ),
         "gallery": str(rec.gallery_dir),
         "backend": rec._backend if rec._app else "pending",
+        "model_dir": str(insightface_model_dir(rec.model_name)),
     }
 
 
 def build_gallery_from_custom(custom_dir: str | Path) -> dict:
-    """从自定义目录构建人脸库，目录结构: custom_dir/person_name/*.jpg"""
     custom_dir = Path(custom_dir)
+    bootstrap_env()
     rec = FaceRecognizer()
     count = 0
     for person_dir in custom_dir.iterdir():

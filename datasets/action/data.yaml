@@ -1,9 +1,9 @@
+path: .
+train: images/train
+val: images/val
+nc: 4
 names:
   0: normal
   1: smoking
   2: fighting
   3: falling
-nc: 4
-path: D:\usual\document\1demo_lib\windows\python\cursor\yolo8_10_all\datasets\action
-train: images/train
-val: images/val

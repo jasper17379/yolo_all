@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 下载真实车牌/动作图片并生成 YOLO 标注。
-来源: Wikimedia Commons (CC 协议) + 免费图库直链。
+
+【已弃用】自动框标注不准确，请改用:
+  python scripts/build_reference_datasets.py
 """
 
 from __future__ import annotations
@@ -275,6 +277,9 @@ def download_action_dataset(train_n: int = 40, val_n: int = 10) -> dict:
 
 
 def main():
+    print("此脚本已弃用（自动标注框不准确）。")
+    print("请运行: python scripts/build_reference_datasets.py")
+    return
     random.seed(42)
     stats = {}
     stats["plate"] = download_plate_dataset()

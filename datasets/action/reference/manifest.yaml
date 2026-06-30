@@ -1,0 +1,80 @@
+- bbox:
+  - 0
+  - 0.5
+  - 0.484375
+  - 0.4166666666666667
+  - 0.65625
+  class_id: 0
+  generator: normal
+  name: action_local_normal
+  split: train
+- bbox:
+  - 0
+  - 0.5
+  - 0.484375
+  - 0.4166666666666667
+  - 0.65625
+  class_id: 0
+  generator: normal
+  name: action_local_normal2
+  split: train
+- bbox:
+  - 1
+  - 0.5
+  - 0.484375
+  - 0.4166666666666667
+  - 0.65625
+  class_id: 1
+  generator: smoking
+  name: action_local_smoking
+  split: train
+- bbox:
+  - 1
+  - 0.5
+  - 0.484375
+  - 0.4166666666666667
+  - 0.65625
+  class_id: 1
+  generator: smoking
+  name: action_local_smoking2
+  split: val
+- bbox:
+  - 2
+  - 0.5833333333333334
+  - 0.4765625
+  - 0.6666666666666666
+  - 0.671875
+  class_id: 2
+  generator: fighting
+  name: action_local_fighting
+  split: train
+- bbox:
+  - 2
+  - 0.5833333333333334
+  - 0.4765625
+  - 0.6666666666666666
+  - 0.671875
+  class_id: 2
+  generator: fighting
+  name: action_local_fighting2
+  split: val
+- bbox:
+  - 3
+  - 0.5
+  - 0.59375
+  - 0.5833333333333334
+  - 0.1875
+  class_id: 3
+  generator: falling
+  name: action_local_falling
+  split: train
+- bbox:
+  - 3
+  - 0.5
+  - 0.59375
+  - 0.5833333333333334
+  - 0.1875
+  class_id: 3
+  generator: falling
+  name: action_local_falling2
+  split: val

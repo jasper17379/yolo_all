@@ -2,6 +2,8 @@ task: face
 type: recognition
 description: 人脸识别
 model: buffalo_l
+model_root: third_party/models/insightface
 gallery: datasets/face/gallery
 det_threshold: 0.5
 rec_threshold: 0.4
+max_images_per_person: 20

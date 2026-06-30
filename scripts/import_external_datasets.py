@@ -16,6 +16,7 @@ DATASETS = PROJECT_ROOT / "datasets"
 # 默认外部数据源
 DEFAULT_HELMET_SRC = Path(r"E:\iVS-100-DB-Bak\datasets")
 DEFAULT_FACE_SRC = Path(r"E:\iVS-100-DB-Bak\face\face\test")
+DEFAULT_PLATE_SRC = Path(r"E:\iVS-100-DB-Bak\datasets\plate")
 
 
 def _clear_dir(path: Path) -> None:
@@ -138,8 +139,10 @@ def main():
     parser = argparse.ArgumentParser(description="导入外部真实数据集")
     parser.add_argument("--helmet-src", type=str, default=str(DEFAULT_HELMET_SRC))
     parser.add_argument("--face-src", type=str, default=str(DEFAULT_FACE_SRC))
+    parser.add_argument("--plate-src", type=str, default=str(DEFAULT_PLATE_SRC), help="YOLO 格式 plate 数据(images+labels)")
     parser.add_argument("--skip-helmet", action="store_true")
     parser.add_argument("--skip-face", action="store_true")
+    parser.add_argument("--skip-plate", action="store_true")
     parser.add_argument("--val-ratio", type=float, default=0.2)
     args = parser.parse_args()
 
@@ -151,6 +154,25 @@ def main():
         stats["helmet"] = import_helmet(helmet_src, val_ratio=args.val_ratio)
     if not args.skip_face:
         stats["face"] = import_face(face_src)
+    if not args.skip_plate:
+        import importlib.util
+
+        plate_mod_path = Path(__file__).parent / "import_plate_dataset.py"
+        spec = importlib.util.spec_from_file_location("import_plate_dataset", plate_mod_path)
+        plate_mod = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(plate_mod)
+
+        plate_src = Path(args.plate_src)
+        if plate_src.exists():
+            dtype, info = plate_mod.detect_dataset_type(plate_src)
+            if dtype == "yolo":
+                stats["plate"] = plate_mod.import_plate_yolo(plate_src, val_ratio=args.val_ratio)
+            elif dtype == "char_classification":
+                plate_mod.print_char_classification_help(info)
+                print("\n跳过 plate 导入。请使用 YOLO 检测数据或运行: python scripts/import_plate_dataset.py --analyze-only")
+            else:
+                print(f"跳过 plate: 无法识别格式 {plate_src}")
 
     print("\n=== 真实数据集导入完成 ===")
     print(stats)
