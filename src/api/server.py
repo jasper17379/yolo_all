@@ -22,39 +22,47 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.core.config import PROJECT_ROOT, ensure_dirs
+from src.core.config import PROJECT_ROOT, ensure_dirs, load_global_config
+from src.core.device import gpu_count
 from src.infer.inferencer import infer_task
+from src.core.train_config import InferHyperParams, TrainHyperParams
 from src.tasks.face_recognition import FaceRecognizer
 from src.train.trainer import train_task
 
 # 创建 FastAPI 应用实例，title/version 会出现在自动文档 /docs 里
 app = FastAPI(title="Vision AI Platform API", version="1.0.0")
+_DEFAULT_DEVICE = load_global_config().get("device", "auto")
+
+
+def _face_rec() -> FaceRecognizer:
+    return FaceRecognizer(device=_DEFAULT_DEVICE)
 
 
 class TrainRequest(BaseModel):
-    """
-    Pydantic 模型：定义 POST /api/v1/train 的 JSON  body 字段和类型。
-
-    缺少必填字段或类型不对时，FastAPI 自动返回 422 错误。
-    """
-
     task: str
     yolo_version: str = "yolov8"
     model_size: str = "n"
+    device: str = "auto"
     epochs: int = 20
     batch: int = 8
+    imgsz: int = 640
+    lr0: Optional[float] = None
+    patience: Optional[int] = None
+    workers: Optional[int] = None
     resume_from_best: bool = False
     weights: Optional[str] = None
 
 
 class InferRequest(BaseModel):
-    """推理 API 的请求体。"""
-
     task: str
     source: str
     yolo_version: str = "yolov8"
     model_size: str = "n"
+    device: str = "auto"
     conf: float = 0.25
+    iou: float = 0.45
+    imgsz: int = 640
+    half: bool = False
 
 
 @app.on_event("startup")
@@ -70,20 +78,29 @@ def create_app() -> FastAPI:
 
 @app.get("/health")
 def health():
-    """健康检查，负载均衡或监控常用。"""
-    return {"status": "ok", "version": "1.0.0"}
+    return {"status": "ok", "version": "1.0.0", "gpu_count": gpu_count(), "default_device": load_global_config().get("device", "auto")}
 
 
 @app.post("/api/v1/train")
 def api_train(req: TrainRequest):
     """触发模型训练（同步执行，耗时会较长）。"""
     try:
+        hyper = TrainHyperParams.from_global(
+            {
+                "epochs": req.epochs,
+                "batch": req.batch,
+                "imgsz": req.imgsz,
+                "lr0": req.lr0,
+                "patience": req.patience,
+                "workers": req.workers,
+            }
+        )
         result = train_task(
             task=req.task,
             yolo_version=req.yolo_version,
             model_size=req.model_size,
-            epochs=req.epochs,
-            batch=req.batch,
+            device=req.device,
+            hyper=hyper,
             resume_from_best=req.resume_from_best,
             weights=req.weights,
         )
@@ -96,7 +113,17 @@ def api_train(req: TrainRequest):
 def api_infer(req: InferRequest):
     """对指定路径的图片/目录做推理。"""
     try:
-        results = infer_task(req.task, req.source, req.yolo_version, req.model_size, req.conf)
+        hyper = InferHyperParams.from_global(
+            {"conf": req.conf, "iou": req.iou, "imgsz": req.imgsz, "half": req.half}
+        )
+        results = infer_task(
+            req.task,
+            req.source,
+            req.yolo_version,
+            req.model_size,
+            req.device,
+            hyper,
+        )
         return {"success": True, "results": results}
     except Exception as e:
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
@@ -119,7 +146,7 @@ async def face_enroll(name: str = Form(...), image: UploadFile = File(...)):
         with open(save_path, "wb") as f:
             shutil.copyfileobj(image.file, f)
 
-        rec = FaceRecognizer()
+        rec = _face_rec()
         result = rec.enroll(name, save_path)
         return result
     except Exception as e:
@@ -129,14 +156,14 @@ async def face_enroll(name: str = Form(...), image: UploadFile = File(...)):
 @app.get("/api/v1/face/list")
 def face_list():
     """列出 gallery 中已录入的姓名。"""
-    rec = FaceRecognizer()
+    rec = _face_rec()
     return {"persons": rec.list_persons(), "count": len(rec.list_persons())}
 
 
 @app.delete("/api/v1/face/{name}")
 def face_delete(name: str):
     """从 gallery 删除某人（路径参数 name）。"""
-    rec = FaceRecognizer()
+    rec = _face_rec()
     ok = rec.remove_person(name)
     return {"success": ok}
 

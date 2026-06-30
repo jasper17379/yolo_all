@@ -17,7 +17,8 @@ from typing import Any
 import cv2
 import numpy as np
 
-from src.core.config import PROJECT_ROOT, load_task_config, resolve_path
+from src.core.config import PROJECT_ROOT, load_global_config, load_task_config, resolve_path
+from src.core.device import resolve_face_ctx_id, resolve_onnx_providers
 from src.core.third_party_paths import INSIGHTFACE_ROOT, bootstrap_env, insightface_model_dir, migrate_insightface_from_user_home
 
 
@@ -60,9 +61,10 @@ class SimpleFaceBackend:
 class FaceRecognizer:
     """人脸检测 + 识别 + 录入（enroll）。"""
 
-    def __init__(self, model_name: str | None = None):
+    def __init__(self, model_name: str | None = None, device: str | None = None):
         cfg = load_task_config("face")
         self.model_name = model_name or cfg.get("model", "buffalo_l")
+        self.device = device or load_global_config().get("device", "auto")
         self.gallery_dir = resolve_path(cfg.get("gallery", "datasets/face/gallery"))
         self.gallery_dir.mkdir(parents=True, exist_ok=True)
         self.det_threshold = cfg.get("det_threshold", 0.5)
@@ -81,16 +83,18 @@ class FaceRecognizer:
                 try:
                     from insightface.app import FaceAnalysis
 
+                    providers = resolve_onnx_providers(self.device)
+                    ctx_id = resolve_face_ctx_id(self.device)
                     self._app = FaceAnalysis(
                         name=self.model_name,
                         root=str(INSIGHTFACE_ROOT),
-                        providers=["CPUExecutionProvider"],
+                        providers=providers,
                     )
-                    self._app.prepare(ctx_id=0, det_size=(640, 640))
+                    self._app.prepare(ctx_id=ctx_id, det_size=(640, 640))
                     if hasattr(self._app, "det_model"):
                         self._app.det_model.det_thresh = min(self.det_threshold, 0.3)
                     self._backend = "insightface"
-                    print(f"[face] InsightFace 模型: {model_dir}")
+                    print(f"[face] InsightFace 模型: {model_dir} | device={self.device} ctx_id={ctx_id}")
                     return self._app
                 except Exception as e:
                     print(f"[face] InsightFace 加载失败，回退 OpenCV: {e}")

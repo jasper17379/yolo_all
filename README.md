@@ -321,72 +321,86 @@ python -m src.train.trainer --task plate --yolo yolov8 --model-size n --epochs 2
 
 ## 训练命令
 
-
-
 ### 通用参数
 
-
-
 | 参数 | 说明 |
-
 |------|------|
-
 | `--task` | `helmet` / `plate` / `action` / `face` / `all` |
-
 | `--yolo` | `yolov5` / `yolov8` / `yolov10` |
-
 | `--model-size` | `n` / `s` / `m` / `l` / `x`（v10 另有 `b`） |
-
+| `--device` | `auto` / `cpu` / `cuda` / `cuda:0` / `0` / `0,1`（多卡） |
 | `--epochs` | 训练轮数，默认 20 |
-
 | `--batch` | 批大小，默认 8 |
-
+| `--imgsz` | 输入尺寸，默认 640 |
 | `--resume-from-best` | 在 `weights/{task}/best_{yolo}{size}.pt` 上继续训练 |
-
 | `--weights` | 显式指定 .pt 路径（覆盖 model-size 预训练） |
-
 | `--resume` | 从 `last.pt` 断点续训 |
 
+### 训练超参（可选，默认见 `configs/global.yaml`）
 
+| 参数 | 说明 | 默认 |
+|------|------|------|
+| `--lr0` | 初始学习率 | 0.01 |
+| `--lrf` | 最终学习率因子 | 0.01 |
+| `--patience` | 早停耐心值（epoch） | 50 |
+| `--workers` | DataLoader 线程数 | 4 |
+| `--optimizer` | `auto` / `SGD` / `Adam` / `AdamW` | auto |
+| `--momentum` | SGD 动量 | 0.937 |
+| `--weight-decay` | 权重衰减 | 0.0005 |
+| `--warmup-epochs` | 预热轮数 | 3.0 |
+| `--mosaic` | 马赛克增强概率 0~1 | 1.0 |
+| `--close-mosaic` | 最后 N 个 epoch 关闭 mosaic | 10 |
+| `--cos-lr` | 余弦学习率调度 | 关 |
+| `--no-amp` | 关闭混合精度 AMP | AMP 开 |
+| `--freeze` | 冻结 backbone 前 N 层 | 不冻结 |
+| `--seed` | 随机种子 | 0 |
+
+全局默认可在 `configs/global.yaml` 的 `device`、`train`、`infer` 段修改。
+
+### 设备选择
+
+```bash
+# 查看当前环境可用设备
+python scripts/list_devices.py
+
+# 自动：有 GPU 用 cuda:0，否则 cpu
+python -m src.train.trainer --task helmet --device auto
+
+# 指定单卡 / 多卡 / 强制 CPU
+python -m src.train.trainer --task helmet --device 0
+python -m src.train.trainer --task helmet --device 0,1 --batch 16
+python -m src.train.trainer --task face --device cpu
+```
+
+| `--device` | YOLO 训练/推理 | InsightFace 人脸 | PaddleOCR 车牌 |
+|------------|----------------|------------------|----------------|
+| `auto` | 有 GPU → `0`，否则 `cpu` | CUDA 优先，失败回退 CPU | 尝试 GPU |
+| `cpu` | 强制 CPU | 仅 CPU | CPU |
+| `0` / `cuda:0` | 指定 GPU 0 | GPU 0 | GPU |
+| `0,1` | 多卡 DataParallel | 使用 GPU 0 | GPU |
 
 ### 示例
 
-
-
 ```bash
-
-# 预训练权重（nano）
-
-python -m src.train.trainer --task plate --yolo yolov8 --model-size n --epochs 20
-
-
+# 预训练权重（nano）+ 自定义超参
+python -m src.train.trainer --task plate --yolo yolov8 --model-size n \
+  --device 0 --epochs 20 --batch 8 --lr0 0.01 --patience 30
 
 # 使用 small 预训练
-
-python -m src.train.trainer --task plate --yolo yolov8 --model-size s --epochs 20
-
-
+python -m src.train.trainer --task plate --yolo yolov8 --model-size s --device auto --epochs 20
 
 # 在 best_yolov8s 上继续训练
-
-python -m src.train.trainer --task plate --yolo yolov8 --model-size s --epochs 50 --resume-from-best
-
-
+python -m src.train.trainer --task plate --yolo yolov8 --model-size s --device 0 \
+  --epochs 50 --resume-from-best --lr0 0.001
 
 # 指定预训练文件
-
-python -m src.train.trainer --task helmet --yolo yolov10 --weights weights/pretrained/yolov10m.pt --epochs 20
-
-
+python -m src.train.trainer --task helmet --yolo yolov10 --weights weights/pretrained/yolov10m.pt \
+  --device 0 --epochs 20 --optimizer AdamW
 
 # 安全帽 / 动作 / 人脸库
-
-python -m src.train.trainer --task helmet --yolo yolov8 --model-size n --epochs 20
-
-python -m src.train.trainer --task action --yolo yolov8 --model-size n --epochs 20
-
-python -m src.train.trainer --task face
-
+python -m src.train.trainer --task helmet --yolo yolov8 --model-size n --device auto --epochs 20
+python -m src.train.trainer --task action --yolo yolov8 --model-size n --device 0 --epochs 20 --no-amp
+python -m src.train.trainer --task face --device cuda:0
 ```
 
 
@@ -405,20 +419,28 @@ python -m src.train.trainer --task face
 
 ## 推理命令
 
-
+| 参数 | 说明 | 默认 |
+|------|------|------|
+| `--device` | 同训练：`auto` / `cpu` / `0` / `cuda:0` | `auto` |
+| `--conf` | 置信度阈值 | 0.25 |
+| `--iou` | NMS IoU 阈值 | 0.45 |
+| `--imgsz` | 输入尺寸 | 640 |
+| `--half` | FP16 推理（需 GPU） | 关 |
 
 ```bash
+python -m src.infer.inferencer --task helmet --source datasets/helmet/images/val \
+  --yolo yolov8 --model-size n --device auto
 
-python -m src.infer.inferencer --task helmet --source datasets/helmet/images/val --yolo yolov8 --model-size n
+python -m src.infer.inferencer --task plate --source datasets/plate/images/val \
+  --device 0 --conf 0.3 --imgsz 640
 
-python -m src.infer.inferencer --task plate --source datasets/plate/images/val --yolo yolov8 --model-size n
+python -m src.infer.inferencer --task action --source test_video.mp4 \
+  --yolo yolov8 --model-size s --device 0 --half
 
-python -m src.infer.inferencer --task action --source test_video.mp4 --yolo yolov8 --model-size s
+python -m src.infer.inferencer --task face --source datasets/face/lfw/Aaron_Eckhart/Aaron_Eckhart_0001.jpg \
+  --device cpu
 
-python -m src.infer.inferencer --task face --source datasets/face/lfw/Aaron_Eckhart/Aaron_Eckhart_0001.jpg
-
-python -m src.infer.inferencer --task helmet --source test.jpg --output-json outputs/result.json
-
+python -m src.infer.inferencer --task helmet --source test.jpg --device 0 --output-json outputs/result.json
 ```
 
 
@@ -432,18 +454,12 @@ python -m src.infer.inferencer --task helmet --source test.jpg --output-json out
 
 
 ```bash
-
 python demo.py
-
-python demo.py --tasks helmet plate --yolo yolov8 --model-size n --no-face
-
-python demo.py --lite
-
+python demo.py --tasks helmet plate --yolo yolov8 --model-size n --device 0 --no-face
+python demo.py --lite --device cpu
 ```
 
-
-
-`--yolo` 与 `--model-size` 决定加载的 `weights/{task}/best_{tag}.pt`。
+`--yolo`、`--model-size` 决定加载的 `weights/{task}/best_{tag}.pt`；`--device` 同时作用于 YOLO 检测与人脸 InsightFace。
 
 
 
@@ -463,7 +479,34 @@ python -m src.api.server
 
 
 
-训练/推理 JSON 支持 `model_size` 字段（默认 `"n"`），与命令行 `--model-size` 一致。
+训练/推理 JSON 除 `model_size` 外，还支持 `device` 及主要超参：
+
+```json
+POST /api/v1/train
+{
+  "task": "helmet",
+  "yolo_version": "yolov8",
+  "model_size": "n",
+  "device": "0",
+  "epochs": 20,
+  "batch": 8,
+  "imgsz": 640,
+  "lr0": 0.01,
+  "patience": 30
+}
+
+POST /api/v1/infer
+{
+  "task": "helmet",
+  "source": "datasets/helmet/images/val",
+  "device": "auto",
+  "conf": 0.25,
+  "iou": 0.45,
+  "half": false
+}
+```
+
+`GET /health` 返回 `gpu_count` 与 `default_device`。
 
 
 
@@ -476,9 +519,7 @@ python -m src.api.server
 
 
 ```bash
-
-python scripts/export_models.py --task plate --yolo yolov8 --model-size n --format onnx
-
+python scripts/export_models.py --task plate --yolo yolov8 --model-size n --format onnx --device 0
 ```
 
 

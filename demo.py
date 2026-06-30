@@ -71,7 +71,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # ---------------------------------------------------------------------------
 
 # load_task_config：读取 configs/tasks/{task}.yaml 里的任务配置（类别名等）
-from src.core.config import load_task_config
+from src.core.config import load_global_config, load_task_config
+from src.core.device import add_device_arg, print_device_info, resolve_yolo_device
 
 # YOLOWrapper：对 Ultralytics YOLO 的统一封装，负责加载权重和 predict
 from src.core.yolo_wrapper import YOLOWrapper
@@ -114,6 +115,7 @@ class RealtimeDemo:
         camera_id: int = 0,           # 摄像头设备号，0 通常是默认 USB 摄像头
         yolo_version: str = "yolov8", # YOLO 版本：v5 / v8 / v10
         model_size: str = "n",        # 模型规模 n/s/m/l/x，对应 best_yolov8n.pt 等
+        device: str = "auto",         # auto | cpu | cuda:0 | 0 | 0,1
         conf: float = 0.35,           # 检测置信度阈值，低于此值的框会被丢弃
         use_face: bool = True,        # 是否启用人脸识别
         imgsz: int = 416,             # 推理时图像缩放到该尺寸（越小越快）
@@ -124,6 +126,8 @@ class RealtimeDemo:
         self.imgsz = imgsz
         self.yolo_version = yolo_version
         self.model_size = model_size
+        self.device = device
+        self.yolo_device = resolve_yolo_device(device)
         self.face_interval = max(1, face_interval)  # 至少为 1，避免除零
         self._running = False       # 主循环是否继续
         self._frame_idx = 0         # 当前帧序号，用于 face_interval
@@ -147,7 +151,7 @@ class RealtimeDemo:
 
         self.face_rec: FaceRecognizer | None = None
         if use_face and "face" in tasks:
-            self.face_rec = FaceRecognizer()
+            self.face_rec = FaceRecognizer(device=device)
 
         # 打开摄像头：Windows 优先用 DirectShow (CAP_DSHOW)，兼容性更好
         self.cap = cv2.VideoCapture(camera_id, cv2.CAP_DSHOW)
@@ -220,8 +224,9 @@ class RealtimeDemo:
             source=frame,
             conf=self.conf,
             imgsz=self.imgsz,
-            save=False,      # 不保存到磁盘
-            verbose=False,   # 不打印 Ultralytics 日志
+            device=self.yolo_device,
+            save=False,
+            verbose=False,
         )
 
         dets = []
@@ -409,6 +414,7 @@ def main():
     )
     parser.add_argument("--camera", type=int, default=0)
     parser.add_argument("--yolo", default="yolov8", choices=["yolov5", "yolov8", "yolov10"])
+    add_device_arg(parser, default=load_global_config().get("device", "auto"))
     parser.add_argument(
         "--model-size",
         default="n",
@@ -425,6 +431,7 @@ def main():
         help="轻量模式: 仅 helmet + 关闭 face",
     )
     args = parser.parse_args()
+    print_device_info(args.device)
 
     tasks = args.tasks
     if args.lite:
@@ -440,6 +447,7 @@ def main():
             camera_id=args.camera,
             yolo_version=args.yolo,
             model_size=args.model_size,
+            device=args.device,
             conf=args.conf,
             use_face="face" in tasks,
             imgsz=args.imgsz,

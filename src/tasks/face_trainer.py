@@ -1,19 +1,22 @@
-"""
-人脸库构建 - 从 LFW 等数据集初始化 gallery。
-"""
+"""人脸库构建 - 从 LFW 等数据集初始化 gallery。"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 from src.core.config import resolve_path
+from src.core.device import print_device_info
 from src.core.third_party_paths import bootstrap_env, insightface_model_dir
 from src.tasks.face_recognition import FaceRecognizer
 
 
-def train_face_gallery(max_persons: int | None = None, max_images_per_person: int = 20) -> dict:
-    """从 datasets/face/lfw 构建初始人脸库。"""
+def train_face_gallery(
+    max_persons: int | None = None,
+    max_images_per_person: int = 20,
+    device: str = "auto",
+) -> dict:
     bootstrap_env()
+    print_device_info(device)
     lfw_dir = resolve_path("datasets/face/lfw")
     if not lfw_dir.exists():
         return {
@@ -28,7 +31,7 @@ def train_face_gallery(max_persons: int | None = None, max_images_per_person: in
     if max_persons is not None:
         persons = persons[:max_persons]
 
-    rec = FaceRecognizer()
+    rec = FaceRecognizer(device=device)
     enrolled = 0
     failed = 0
     total = len(persons)
@@ -45,6 +48,7 @@ def train_face_gallery(max_persons: int | None = None, max_images_per_person: in
 
     return {
         "task": "face",
+        "device": device,
         "enrolled": enrolled,
         "failed": failed,
         "total_images": sum(
@@ -58,10 +62,10 @@ def train_face_gallery(max_persons: int | None = None, max_images_per_person: in
     }
 
 
-def build_gallery_from_custom(custom_dir: str | Path) -> dict:
+def build_gallery_from_custom(custom_dir: str | Path, device: str = "auto") -> dict:
     custom_dir = Path(custom_dir)
     bootstrap_env()
-    rec = FaceRecognizer()
+    rec = FaceRecognizer(device=device)
     count = 0
     for person_dir in custom_dir.iterdir():
         if person_dir.is_dir():
