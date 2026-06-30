@@ -153,6 +153,18 @@ class RealtimeDemo:
         if use_face and "face" in tasks:
             self.face_rec = FaceRecognizer(device=device)
 
+        self.plate_rec = None
+        if "plate" in tasks:
+            from src.tasks.plate_recognition import PlateRecognizer
+
+            self.plate_rec = PlateRecognizer(
+                yolo_version=yolo_version,
+                model_size=model_size,
+                device=device,
+            )
+            # plate 走 PlateRecognizer（YOLO+OCR），不再单独加载到 models
+            self.models.pop("plate", None)
+
         # 打开摄像头：Windows 优先用 DirectShow (CAP_DSHOW)，兼容性更好
         self.cap = cv2.VideoCapture(camera_id, cv2.CAP_DSHOW)
         if not self.cap.isOpened():
@@ -192,6 +204,7 @@ class RealtimeDemo:
 
         self.models.clear()
         self.face_rec = None
+        self.plate_rec = None
         gc.collect()
 
         # 若安装了 PyTorch 且用 GPU，清空 CUDA 缓存
@@ -247,6 +260,34 @@ class RealtimeDemo:
                         "bbox": (x1, y1, x2, y2),
                     }
                 )
+        return dets
+
+    def _predict_plate(self, frame: np.ndarray) -> list[dict]:
+        """车牌：YOLO 定位 + HyperLPR3/PaddleOCR 读字。"""
+        if not self._running or not self.plate_rec:
+            return []
+        try:
+            plates = self.plate_rec.recognize_frame(frame, conf=self.conf, imgsz=self.imgsz)
+        except Exception as e:
+            print(f"[plate] 推理异常(已跳过): {e}")
+            return []
+        dets = []
+        for p in plates:
+            bbox = p.get("bbox")
+            if not bbox:
+                continue
+            x1, y1, x2, y2 = bbox
+            text = p.get("plate_text") or "plate"
+            ocr_conf = p.get("ocr_confidence", 0)
+            label = f"{text}({ocr_conf:.2f})" if text != "plate" else "plate"
+            dets.append(
+                {
+                    "task": "plate",
+                    "label": label,
+                    "conf": float(p.get("confidence", 0)),
+                    "bbox": (int(x1), int(y1), int(x2), int(y2)),
+                }
+            )
         return dets
 
     def _predict_face(self, frame: np.ndarray) -> list[dict]:
@@ -328,7 +369,10 @@ class RealtimeDemo:
                 for task in self.tasks:
                     if task == "face" or not self._running:
                         continue
-                    detections.extend(self._predict_yolo(task, frame))
+                    if task == "plate":
+                        detections.extend(self._predict_plate(frame))
+                    else:
+                        detections.extend(self._predict_yolo(task, frame))
 
                 # 人脸：按间隔推理，中间帧复用 _last_face_dets
                 if self.face_rec and "face" in self.tasks:

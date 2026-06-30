@@ -1,8 +1,9 @@
 task: plate
 type: detection
-description: 车牌检测
+description: 车牌检测 + HyperLPR3 识别
 classes:
   0: plate
 dataset: datasets/plate/data.yaml
 default_weights: yolov8n.pt
-ocr_engine: paddleocr
+ocr_engine: auto
+fallback_e2e: true

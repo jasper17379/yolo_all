@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "image": "plate_local_scene_rear2.jpg",
+  "description": "车牌识别真值：与 labels/*.txt 检测框一一对应",
+  "plates": [
+    {
+      "plate_text": "京D98765",
+      "plate_type": "蓝牌",
+      "bbox_yolo": [
+        0,
+        0.5,
+        0.795833,
+        0.3125,
+        0.091667
+      ],
+      "note": "本地范例-scene_rear"
+    }
+  ]
+}

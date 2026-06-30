@@ -19,7 +19,7 @@ import numpy as np
 
 from src.core.config import PROJECT_ROOT, load_global_config, load_task_config, resolve_path
 from src.core.device import resolve_face_ctx_id, resolve_onnx_providers
-from src.core.third_party_paths import INSIGHTFACE_ROOT, bootstrap_env, insightface_model_dir, migrate_insightface_from_user_home
+from src.core.third_party_paths import INSIGHTFACE_ROOT, bootstrap_env, import_face_analysis, insightface_model_dir, migrate_insightface_from_user_home
 
 
 class SimpleFaceBackend:
@@ -81,7 +81,7 @@ class FaceRecognizer:
             model_dir = insightface_model_dir(self.model_name)
             if model_dir.exists() and any(model_dir.iterdir()):
                 try:
-                    from insightface.app import FaceAnalysis
+                    FaceAnalysis = import_face_analysis()
 
                     providers = resolve_onnx_providers(self.device)
                     ctx_id = resolve_face_ctx_id(self.device)

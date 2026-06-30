@@ -34,15 +34,18 @@ datasets/
 
 
 
-## 车牌检测数据格式（YOLO）
+## 车牌数据（检测 + 识别）
 
 
 
-本项目 **plate 任务训练的是「车牌定位」**（在完整场景图中框出车牌），不是单字符分类。
+本项目 **plate 任务分两阶段**：
+
+1. **检测（YOLO，可训练）**：在场景图中框出车牌区域
+2. **识别（HyperLPR3，预训练）**：读取车牌号，无需训练
 
 
 
-### 正确格式
+### 检测标注（YOLO）
 
 
 
@@ -52,11 +55,15 @@ datasets/plate/
 
   images/train/*.jpg
 
-  labels/train/*.txt    # 与图片同名
+  labels/train/*.txt    # 与图片同名，YOLO 格式
 
   images/val/
 
   labels/val/
+
+  recognition/train/*.json   # 可选：车牌号真值（OCR 评测用）
+
+  recognition/val/*.json
 
   data.yaml
 
@@ -80,11 +87,61 @@ class_id x_center y_center width height
 
 
 
+### 识别标注（JSON，与检测分开）
+
+
+
+`recognition/train/xxx.json` 示例：
+
+
+
+```json
+
+{
+
+  "version": "1.0",
+
+  "image": "scene_001.jpg",
+
+  "plates": [
+
+    {
+
+      "plate_text": "京A12345",
+
+      "plate_type": "蓝牌",
+
+      "bbox_yolo": [0, 0.5, 0.8, 0.3, 0.09],
+
+      "note": "与 labels 中检测框一一对应"
+
+    }
+
+  ]
+
+}
+
+```
+
+
+
+模板见 `datasets/plate/reference/templates/`。识别标注用于 **OCR 准确率评测**，不用于训练。
+
+
+
+```bash
+
+python scripts/eval_plate_recognition.py --split val --mode crop
+
+```
+
+
+
 ### 不能直接使用的情况
 
 
 
-若数据为 **按字符/汉字分子文件夹**（如 `plate/A/*.jpg`、`plate/京/*.jpg`），且图片为 **20×20 左右单字裁剪图**，则属于 **OCR/字符分类数据**，不能用于 YOLO 车牌定位训练。文字识别由推理阶段的 PaddleOCR 完成。
+若数据为 **按字符/汉字分子文件夹**（如 `plate/A/*.jpg`、`plate/京/*.jpg`），且图片为 **20×20 左右单字裁剪图**，则属于 **OCR/字符分类数据**，不能用于 YOLO 车牌定位训练。本项目识别阶段使用预训练 **HyperLPR3**（回退 PaddleOCR），无需此类单字数据训练。
 
 
 

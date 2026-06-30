@@ -18,11 +18,11 @@
 
 | 安全帽检测 | YOLO 检测 | `no_helmet`, `helmet` |
 
-| 车牌识别 | YOLO 检测 + PaddleOCR | 检测 + OCR |
+| 车牌识别 | YOLO 定位 + HyperLPR3 读字（PaddleOCR 回退） | 检测可训练 + OCR 预训练 |
 
 | 动作识别 | YOLO 检测 | `normal`, `smoking`, `fighting`, `falling` |
 
-| 人脸识别 | InsightFace (buffalo_l) | 检测 + 特征比对 |
+| 人脸识别 | InsightFace buffalo_l（源码 vendored） | 检测 + 特征比对 |
 
 
 
@@ -98,16 +98,20 @@ pip install -r requirements.txt
 本项目训练通过 `pip` 调用各库，**源码与模型权重** 统一放在 `third_party/`：
 
 ```bash
-python scripts/setup_third_party.py    # InsightFace/PaddleOCR 源码 + 人脸模型迁移
+python scripts/setup_third_party.py    # HyperLPR/InsightFace/PaddleOCR 源码 + 模型
 python scripts/setup_yolo_sources.py     # YOLOv5 / ultralytics 源码
+python scripts/check_offline_deps.py     # 离线移植前核对
 ```
 
 | 路径 | 内容 |
 |------|------|
-| `third_party/models/insightface/` | 人脸模型 buffalo_l（不再用 `~/.insightface`） |
-| `third_party/models/paddleocr/` | 车牌 OCR 模型缓存 |
-| `third_party/yolov5/`、`ultralytics/` | YOLO 源码 |
-| `third_party/insightface/`、`PaddleOCR/` | 业务库源码 |
+| `third_party/ultralytics/` | YOLOv8/v10 运行库（**无需 pip install ultralytics**） |
+| `third_party/HyperLPR/Prj-Python/` | HyperLPR3 车牌识别（**无需 pip install hyperlpr3**） |
+| `third_party/models/hyperlpr3/` | HyperLPR3 ONNX 模型 |
+| `third_party/models/insightface/` | 人脸模型 buffalo_l |
+| `third_party/models/paddleocr/` | PaddleOCR 模型缓存 |
+| `third_party/yolov5/` | YOLOv5 源码（参考） |
+| `third_party/insightface/python-package/` | InsightFace 运行库（**无需 pip install insightface**） |
 
 详见 [third_party/README.md](third_party/README.md)。
 
@@ -187,21 +191,29 @@ python scripts/build_reference_datasets.py
 ```
 datasets/plate/reference/
   images/          # 范例图
-  labels/          # 对应 YOLO txt（框与图严格对齐）
-  preview/         # 红框预览图，用于核对
+  labels/          # YOLO 检测标注（框车牌，用于训练）
+  recognition/     # JSON 识别标注（车牌号真值，用于 OCR 评测）
+  templates/       # detection_label_example.txt + recognition_label_example.json
+  preview/         # 红框+绿字预览
   classes.txt      # LabelImg 类别：plate
-  README.txt       # 标注说明
-
-datasets/action/reference/
-  classes.txt      # normal / smoking / fighting / falling
+  README.txt       # 检测/识别分开标注说明
 ```
 
-**自采数据流程：**
+**车牌两阶段（检测与识别分开标注）：**
 
-1. 用 LabelImg 打开 `reference/images`，格式选 YOLO，加载 `classes.txt`
-2. 对照 `preview/` 红框理解框选范围
-3. 新图放入 `datasets/plate/images/train` + `labels/train`（动作同理）
-4. 重新训练
+| 阶段 | 标注内容 | 目录 | 是否训练 |
+|------|----------|------|----------|
+| 检测 | YOLO 框 `plate` | `labels/*.txt` | 是，训练 YOLO |
+| 识别 | 车牌号真值 | `recognition/*.json` | 否，HyperLPR3 预训练 |
+
+识别引擎：**HyperLPR3**（源码在 `third_party/HyperLPR`，模型在 `third_party/models/hyperlpr3/`）→ 失败回退 **PaddleOCR**。
+
+```bash
+python scripts/setup_third_party.py --download-hyperlpr-models   # 首次下载 ONNX 模型
+python scripts/check_offline_deps.py                           # 离线移植前核对
+```
+
+`datasets/action/reference/` 仍为动作检测 YOLO 模板（classes: normal/smoking/fighting/falling）。
 
 当前范例为本地生成的精确标注图（网络图下载受限时仍可训练）。数据量很少，仅作格式模板；量产请自行标注 50+ 张。
 
@@ -210,6 +222,7 @@ datasets/action/reference/
 python -m src.train.trainer --task plate --yolo yolov8 --model-size n --epochs 10 --batch 4
 python -m src.train.trainer --task action --yolo yolov8 --model-size n --epochs 10 --batch 4
 python -m src.infer.inferencer --task plate --source datasets/plate/images/val --yolo yolov8 --model-size n --conf 0.01
+# 输出含 plate_text 字段（车牌号）
 python -m src.infer.inferencer --task action --source datasets/action/images/val --yolo yolov8 --model-size n --conf 0.01
 ```
 
@@ -289,11 +302,9 @@ python -m src.infer.inferencer --task plate --source datasets/plate/images/val -
 
 
 
-本项目流程：**YOLO 框车牌** → **PaddleOCR 读字**。
+本项目流程：**YOLO 框车牌（可训练）** → **HyperLPR3 读车牌号（预训练，无需标注训练）**。
 
-
-
-YOLO 检测数据格式与标注工具见 [datasets/README.md](datasets/README.md)。
+检测与识别标注分开存放，详见 `datasets/plate/reference/`。
 
 
 
@@ -372,7 +383,7 @@ python -m src.train.trainer --task helmet --device 0,1 --batch 16
 python -m src.train.trainer --task face --device cpu
 ```
 
-| `--device` | YOLO 训练/推理 | InsightFace 人脸 | PaddleOCR 车牌 |
+| `--device` | YOLO 训练/推理 | InsightFace 人脸 | HyperLPR3 / PaddleOCR 车牌 |
 |------------|----------------|------------------|----------------|
 | `auto` | 有 GPU → `0`，否则 `cpu` | CUDA 优先，失败回退 CPU | 尝试 GPU |
 | `cpu` | 强制 CPU | 仅 CPU | CPU |
@@ -512,7 +523,19 @@ POST /api/v1/infer
 
 ---
 
+## 边缘部署（RK3588 / NVIDIA x86）
 
+C++ 推理部署文档见 **[deploy/README.md](deploy/README.md)**：
+
+| 文档 | 说明 |
+|------|------|
+| [deploy/OFFLINE_WORKFLOW.md](deploy/OFFLINE_WORKFLOW.md) | 离线落地流程 + 方案 A（C++ + RKNN） |
+| [deploy/platforms/RK3588_UBUNTU22.md](deploy/platforms/RK3588_UBUNTU22.md) | RK3588 + Ubuntu 22.04 库与编译 |
+| [deploy/platforms/NVIDIA_X86_UBUNTU22.md](deploy/platforms/NVIDIA_X86_UBUNTU22.md) | NVIDIA + Intel + Ubuntu 22.04 |
+
+NVIDIA + Intel + Ubuntu 22 **同样推荐 C++ + ONNX Runtime CUDA**，而非 Python 全栈。
+
+---
 
 ## 模型导出
 

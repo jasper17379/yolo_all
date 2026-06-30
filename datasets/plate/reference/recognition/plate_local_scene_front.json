@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "image": "plate_local_scene_front.jpg",
+  "description": "车牌识别真值：与 labels/*.txt 检测框一一对应",
+  "plates": [
+    {
+      "plate_text": "沪B88888",
+      "plate_type": "蓝牌",
+      "bbox_yolo": [
+        0,
+        0.5,
+        0.85,
+        0.21875,
+        0.075
+      ],
+      "note": "本地范例-scene_front"
+    }
+  ]
+}

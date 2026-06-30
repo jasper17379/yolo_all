@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import urllib.request
 from pathlib import Path
@@ -20,9 +21,38 @@ from pathlib import Path
 import cv2
 import numpy as np
 import yaml
+from PIL import Image, ImageDraw, ImageFont
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATASETS = PROJECT_ROOT / "datasets"
+
+_PLATE_FONT: ImageFont.FreeTypeFont | None = None
+
+
+def _plate_font(size: int = 28) -> ImageFont.FreeTypeFont:
+    global _PLATE_FONT
+    if _PLATE_FONT is not None:
+        return _PLATE_FONT
+    candidates = [
+        "C:/Windows/Fonts/msyh.ttc",
+        "C:/Windows/Fonts/simhei.ttf",
+        "C:/Windows/Fonts/simsun.ttc",
+        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+    ]
+    for fp in candidates:
+        if Path(fp).exists():
+            _PLATE_FONT = ImageFont.truetype(fp, size)
+            return _PLATE_FONT
+    _PLATE_FONT = ImageFont.load_default()
+    return _PLATE_FONT
+
+
+def _put_chinese_text(img: np.ndarray, text: str, xy: tuple[int, int], color=(255, 255, 255), size: int = 28) -> np.ndarray:
+    """在 BGR 图上绘制中文（OpenCV putText 不支持中文）。"""
+    pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    draw = ImageDraw.Draw(pil)
+    draw.text(xy, text, font=_plate_font(size), fill=color)
+    return cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
 
 # 使用 Commons 原图直链（非 thumb，避免 400）
 PLATE_SAMPLES = [
@@ -112,14 +142,14 @@ ACTION_SAMPLES = [
     },
 ]
 
-# 本地生成范例（标注框为程序写入，100% 对齐）
+# 本地生成范例（标注框 + 车牌号均为程序写入，100% 对齐）
 LOCAL_PLATE_SAMPLES = [
-    {"name": "plate_local_scene_rear", "split": "train", "generator": "scene_rear"},
-    {"name": "plate_local_scene_front", "split": "train", "generator": "scene_front"},
-    {"name": "plate_local_closeup_blue", "split": "train", "generator": "closeup"},
-    {"name": "plate_local_scene_rear2", "split": "train", "generator": "scene_rear"},
-    {"name": "plate_local_closeup2", "split": "val", "generator": "closeup"},
-    {"name": "plate_local_scene_front2", "split": "val", "generator": "scene_front"},
+    {"name": "plate_local_scene_rear", "split": "train", "generator": "scene_rear", "plate_text": "京A12345", "plate_type": "蓝牌"},
+    {"name": "plate_local_scene_front", "split": "train", "generator": "scene_front", "plate_text": "沪B88888", "plate_type": "蓝牌"},
+    {"name": "plate_local_closeup_blue", "split": "train", "generator": "closeup", "plate_text": "粤C66666", "plate_type": "蓝牌"},
+    {"name": "plate_local_scene_rear2", "split": "train", "generator": "scene_rear", "plate_text": "京D98765", "plate_type": "蓝牌"},
+    {"name": "plate_local_closeup2", "split": "val", "generator": "closeup", "plate_text": "浙E55555", "plate_type": "蓝牌"},
+    {"name": "plate_local_scene_front2", "split": "val", "generator": "scene_front", "plate_text": "苏F77777", "plate_type": "蓝牌"},
 ]
 
 LOCAL_ACTION_SAMPLES = [
@@ -160,7 +190,15 @@ def _write_yolo(label_path: Path, class_id: int, cx: float, cy: float, w: float,
         f.write(f"{class_id} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}\n")
 
 
-def _draw_preview(img: np.ndarray, class_id: int, cx: float, cy: float, w: float, h: float) -> np.ndarray:
+def _draw_preview(
+    img: np.ndarray,
+    class_id: int,
+    cx: float,
+    cy: float,
+    w: float,
+    h: float,
+    plate_text: str = "",
+) -> np.ndarray:
     out = img.copy()
     ih, iw = out.shape[:2]
     x1 = int((cx - w / 2) * iw)
@@ -168,8 +206,41 @@ def _draw_preview(img: np.ndarray, class_id: int, cx: float, cy: float, w: float
     x2 = int((cx + w / 2) * iw)
     y2 = int((cy + h / 2) * ih)
     cv2.rectangle(out, (x1, y1), (x2, y2), (0, 0, 255), 2)
-    cv2.putText(out, str(class_id), (x1, max(20, y1 - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+    tag = plate_text if plate_text else str(class_id)
+    cv2.putText(out, tag, (x1, max(20, y1 - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
     return out
+
+
+def _write_recognition_json(
+    path: Path,
+    image_name: str,
+    class_id: int,
+    cx: float,
+    cy: float,
+    w: float,
+    h: float,
+    plate_text: str,
+    plate_type: str = "蓝牌",
+    note: str = "",
+) -> None:
+    """识别标注侧车文件（与 YOLO 检测标注分开，用于 OCR 评测/核对）。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "version": "1.0",
+        "image": image_name,
+        "description": "车牌识别真值：与 labels/*.txt 检测框一一对应",
+        "plates": [
+            {
+                "plate_text": plate_text,
+                "plate_type": plate_type,
+                "bbox_yolo": [class_id, round(cx, 6), round(cy, 6), round(w, 6), round(h, 6)],
+                "note": note,
+            }
+        ],
+    }
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+        f.write("\n")
 
 
 def _save_sample(
@@ -184,54 +255,72 @@ def _save_sample(
     w: float,
     h: float,
     note: str,
+    plate_text: str = "",
+    plate_type: str = "蓝牌",
+    task: str = "action",
 ) -> None:
-    img_path = base / "images" / split / f"{name}.jpg"
+    img_name = f"{name}.jpg"
+    img_path = base / "images" / split / img_name
     lbl_path = base / "labels" / split / f"{name}.txt"
     img_path.parent.mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(img_path), img)
     _write_yolo(lbl_path, class_id, cx, cy, w, h)
 
-    ref_img = ref / "images" / f"{name}.jpg"
+    ref_img = ref / "images" / img_name
     ref_lbl = ref / "labels" / f"{name}.txt"
     ref_img.parent.mkdir(parents=True, exist_ok=True)
     ref_lbl.parent.mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(ref_img), img)
     shutil.copy2(lbl_path, ref_lbl)
+
+    if task == "plate":
+        rec_path = base / "recognition" / split / f"{name}.json"
+        ref_rec = ref / "recognition" / f"{name}.json"
+        text = plate_text or "待填写"
+        _write_recognition_json(rec_path, img_name, class_id, cx, cy, w, h, text, plate_type, note)
+        ref_rec.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(rec_path, ref_rec)
+
     (ref / "preview").mkdir(parents=True, exist_ok=True)
-    cv2.imwrite(str(ref / "preview" / f"{name}_preview.jpg"), _draw_preview(img, class_id, cx, cy, w, h))
-    print(f"  [ok] {name} ({split}) - {note}")
+    preview_tag = plate_text if task == "plate" else ""
+    cv2.imwrite(
+        str(ref / "preview" / f"{name}_preview.jpg"),
+        _draw_preview(img, class_id, cx, cy, w, h, preview_tag),
+    )
+    extra = f" | 车牌={plate_text}" if plate_text else ""
+    print(f"  [ok] {name} ({split}) - {note}{extra}")
 
 
-def _gen_plate_scene_rear() -> tuple[np.ndarray, tuple[float, float, float, float]]:
+def _gen_plate_scene_rear(plate_text: str = "京A12345") -> tuple[np.ndarray, tuple[float, float, float, float]]:
     """车尾场景 + 蓝牌，返回图像与 (cx,cy,w,h)。"""
     w, h = 640, 480
     img = np.full((h, w, 3), 90, dtype=np.uint8)
-    cv2.rectangle(img, (80, 80), (560, 400), (120, 120, 120), -1)  # 车身
+    cv2.rectangle(img, (80, 80), (560, 400), (120, 120, 120), -1)
     px, py, pw, ph = 220, 360, 200, 44
-    cv2.rectangle(img, (px, py), (px + pw, py + ph), (200, 80, 30), -1)  # 蓝牌
-    cv2.putText(img, "Jing A12345", (px + 8, py + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    cv2.rectangle(img, (px, py), (px + pw, py + ph), (200, 80, 30), -1)
+    img = _put_chinese_text(img, plate_text, (px + 8, py + 4), size=24)
     cx = (px + pw / 2) / w
     cy = (py + ph / 2) / h
     return img, (cx, cy, pw / w, ph / h)
 
 
-def _gen_plate_scene_front() -> tuple[np.ndarray, tuple[float, float, float, float]]:
+def _gen_plate_scene_front(plate_text: str = "沪B88888") -> tuple[np.ndarray, tuple[float, float, float, float]]:
     w, h = 640, 480
     img = np.full((h, w, 3), 140, dtype=np.uint8)
     cv2.ellipse(img, (320, 300), (200, 120), 0, 0, 360, (60, 60, 60), -1)
     px, py, pw, ph = 250, 390, 140, 36
     cv2.rectangle(img, (px, py), (px + pw, py + ph), (200, 80, 30), -1)
-    cv2.putText(img, "Shanghai", (px + 6, py + 26), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
+    img = _put_chinese_text(img, plate_text, (px + 6, py + 2), size=20)
     cx = (px + pw / 2) / w
     cy = (py + ph / 2) / h
     return img, (cx, cy, pw / w, ph / h)
 
 
-def _gen_plate_closeup() -> tuple[np.ndarray, tuple[float, float, float, float]]:
+def _gen_plate_closeup(plate_text: str = "粤C66666") -> tuple[np.ndarray, tuple[float, float, float, float]]:
     w, h = 400, 120
     img = np.zeros((h, w, 3), dtype=np.uint8)
     img[:] = (200, 80, 30)
-    cv2.putText(img, "Plate Demo", (40, 75), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 2)
+    img = _put_chinese_text(img, plate_text, (20, 30), size=36)
     return img, (0.5, 0.5, 0.92, 0.85)
 
 
@@ -274,9 +363,9 @@ def _gen_action(kind: str) -> tuple[np.ndarray, tuple[float, float, float, float
 
 
 PLATE_GENS = {
-    "scene_rear": _gen_plate_scene_rear,
-    "scene_front": _gen_plate_scene_front,
-    "closeup": _gen_plate_closeup,
+    "scene_rear": lambda text: _gen_plate_scene_rear(text),
+    "scene_front": lambda text: _gen_plate_scene_front(text),
+    "closeup": lambda text: _gen_plate_closeup(text),
 }
 ACTION_GENS = {
     "normal": lambda: _gen_action("normal"),
@@ -299,14 +388,26 @@ def _build_plate() -> dict:
         if img is None:
             continue
         cls_id, cx, cy, w, h = item["bbox"]
-        _save_sample(base, ref, item["name"], item["split"], img, cls_id, cx, cy, w, h, item["note"])
+        _save_sample(
+            base, ref, item["name"], item["split"], img, cls_id, cx, cy, w, h, item["note"],
+            plate_text=item.get("plate_text", "待填写"),
+            plate_type=item.get("plate_type", "蓝牌"),
+            task="plate",
+        )
         manifest.append(item)
         import time
         time.sleep(1.2)  # 降低 Wikimedia 429 限流
 
     for item in LOCAL_PLATE_SAMPLES:
-        img, (cx, cy, w, h) = PLATE_GENS[item["generator"]]()
-        _save_sample(base, ref, item["name"], item["split"], img, 0, cx, cy, w, h, f"本地范例-{item['generator']}")
+        text = item["plate_text"]
+        img, (cx, cy, w, h) = PLATE_GENS[item["generator"]](text)
+        _save_sample(
+            base, ref, item["name"], item["split"], img, 0, cx, cy, w, h,
+            f"本地范例-{item['generator']}",
+            plate_text=text,
+            plate_type=item.get("plate_type", "蓝牌"),
+            task="plate",
+        )
         manifest.append({**item, "bbox": [0, cx, cy, w, h], "note": "本地精确标注"})
 
     train_n = len(list((base / "images" / "train").glob("*.jpg")))
@@ -316,13 +417,52 @@ def _build_plate() -> dict:
 
     with open(ref / "classes.txt", "w", encoding="utf-8") as f:
         f.write("plate\n")
+
+    templates = ref / "templates"
+    templates.mkdir(parents=True, exist_ok=True)
+    with open(templates / "detection_label_example.txt", "w", encoding="utf-8") as f:
+        f.write("# YOLO 检测标注（LabelImg 导出）\n# 每行: class_id x_center y_center width height (0~1)\n0 0.500000 0.795833 0.312500 0.091667\n")
+    with open(templates / "recognition_label_example.json", "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "version": "1.0",
+                "image": "your_image.jpg",
+                "description": "车牌号真值，与 labels 中检测框一一对应",
+                "plates": [
+                    {
+                        "plate_text": "京A12345",
+                        "plate_type": "蓝牌",
+                        "bbox_yolo": [0, 0.5, 0.795833, 0.3125, 0.091667],
+                        "note": "人工核对车牌号",
+                    }
+                ],
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+        f.write("\n")
+
     with open(ref / "README.txt", "w", encoding="utf-8") as f:
         f.write(
-            "车牌 YOLO 标注参考\n"
-            "1. LabelImg 打开 reference/images，格式 YOLO，类别 plate\n"
-            "2. 对照 preview/ 红框\n"
-            "3. 新数据放入 datasets/plate/images/train + labels/train\n"
-            "4. 每行标签: 0 cx cy w h (0~1)\n"
+            "车牌标注参考（检测与识别分开）\n"
+            "================================\n"
+            "本项目车牌流程: YOLO 框车牌(可训练) + HyperLPR3 读字(预训练，无需训练)\n\n"
+            "一、检测标注（训练 YOLO）\n"
+            "  工具: LabelImg，格式 YOLO\n"
+            "  目录: reference/images + reference/labels\n"
+            "  类别: plate (class_id=0)\n"
+            "  每行: 0 cx cy w h (归一化 0~1)\n"
+            "  模板: templates/detection_label_example.txt\n\n"
+            "二、识别标注（OCR 评测/核对，不用于训练）\n"
+            "  目录: reference/recognition/*.json\n"
+            "  与检测框一一对应，填写 plate_text 真值\n"
+            "  模板: templates/recognition_label_example.json\n\n"
+            "三、新增数据\n"
+            "  images/train + labels/train + recognition/train (可选)\n"
+            "  对照 preview/ 红框与绿字核对\n\n"
+            "四、评测 OCR 准确率\n"
+            "  python scripts/eval_plate_recognition.py --split val\n"
         )
     data_yaml = {"path": str(base.resolve()), "train": "images/train", "val": "images/val", "nc": 1, "names": {0: "plate"}}
     with open(base / "data.yaml", "w", encoding="utf-8") as f:

@@ -110,4 +110,5 @@ docker restart vision-ai
 
 - GPU: 设置 `device=cuda:0`，batch 推理
 - CPU: 导出 ONNX + INT8 量化
-- RK3588: 使用 RKNN 模型，NPU 推理
+- RK3588: 使用 RKNN 模型，NPU 推理 — 见 [../OFFLINE_WORKFLOW.md](../OFFLINE_WORKFLOW.md)
+- x86 NVIDIA: C++ + ORT CUDA — 见 [../platforms/NVIDIA_X86_UBUNTU22.md](../platforms/NVIDIA_X86_UBUNTU22.md)

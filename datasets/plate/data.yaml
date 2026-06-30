@@ -1,6 +1,6 @@
-path: .
-train: images/train
-val: images/val
-nc: 1
 names:
   0: plate
+nc: 1
+path: D:\usual\document\1demo_lib\windows\python\cursor\git\yolo_all\datasets\plate
+train: images/train
+val: images/val

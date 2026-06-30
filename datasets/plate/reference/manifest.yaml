@@ -7,6 +7,8 @@
   generator: scene_rear
   name: plate_local_scene_rear
   note: 本地精确标注
+  plate_text: 京A12345
+  plate_type: 蓝牌
   split: train
 - bbox:
   - 0
@@ -17,6 +19,8 @@
   generator: scene_front
   name: plate_local_scene_front
   note: 本地精确标注
+  plate_text: 沪B88888
+  plate_type: 蓝牌
   split: train
 - bbox:
   - 0
@@ -27,6 +31,8 @@
   generator: closeup
   name: plate_local_closeup_blue
   note: 本地精确标注
+  plate_text: 粤C66666
+  plate_type: 蓝牌
   split: train
 - bbox:
   - 0
@@ -37,6 +43,8 @@
   generator: scene_rear
   name: plate_local_scene_rear2
   note: 本地精确标注
+  plate_text: 京D98765
+  plate_type: 蓝牌
   split: train
 - bbox:
   - 0
@@ -47,6 +55,8 @@
   generator: closeup
   name: plate_local_closeup2
   note: 本地精确标注
+  plate_text: 浙E55555
+  plate_type: 蓝牌
   split: val
 - bbox:
   - 0
@@ -57,4 +67,6 @@
   generator: scene_front
   name: plate_local_scene_front2
   note: 本地精确标注
+  plate_text: 苏F77777
+  plate_type: 蓝牌
   split: val

@@ -1,8 +1,7 @@
 """
 统一 YOLO 模型封装 - 支持 YOLOv5 / YOLOv8 / YOLOv10。
 
-底层使用 Ultralytics 库，本类只是把 train / predict / export 接口统一起来，
-避免 demo、trainer、inferencer 里重复写 YOLO 调用代码。
+底层使用 `third_party/ultralytics` 源码（`bootstrap_env` 自动加载），本类统一 train / predict / export 接口。
 """
 
 from __future__ import annotations
@@ -44,13 +43,12 @@ class YOLOWrapper:
         self._model = None  # 延迟加载：构造时不立刻加载大模型，首次 predict 再 load
 
     def load(self):
-        """
-        延迟导入 ultralytics：只有真正用到 YOLO 时才 import，加快无关脚本的启动速度。
-        """
-        from ultralytics import YOLO
+        """从 third_party/ultralytics 加载 YOLO（优先 vendored，非 pip）。"""
+        from src.core.third_party_paths import import_yolo
 
+        YOLO = import_yolo()
         self._model = YOLO(self.weights)
-        return self  # 返回 self 支持链式调用：YOLOWrapper(...).load().predict(...)
+        return self
 
     @property
     def model(self):

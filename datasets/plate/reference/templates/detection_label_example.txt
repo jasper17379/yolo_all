@@ -1,0 +1,3 @@
+# YOLO 检测标注（LabelImg 导出）
+# 每行: class_id x_center y_center width height (0~1)
+0 0.500000 0.795833 0.312500 0.091667

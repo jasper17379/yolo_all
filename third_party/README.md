@@ -1,53 +1,61 @@
 # third_party — 业务依赖源码与模型
 
-本目录集中存放 **检测框架 + 业务场景** 的源码与模型权重，避免依赖散落在 `C:\Python312\...` 或用户家目录。
+本目录集中存放 **检测框架 + 业务场景** 的源码与模型权重，避免依赖散落在系统目录或用户家目录。
 
 ## 目录结构
 
 ```
 third_party/
-├── yolov5/              # YOLOv5 源码
-├── ultralytics/         # YOLOv8 / YOLOv10 源码
-├── insightface/         # InsightFace 源码（人脸识别）
-├── PaddleOCR/           # PaddleOCR 源码（车牌 OCR）
-└── models/              # 模型权重与缓存（运行时实际加载）
-    ├── insightface/
-    │   └── models/
-    │       └── buffalo_l/    # 人脸检测+特征 ONNX
-    └── paddleocr/            # PaddleOCR / PaddleX 下载的 OCR 模型
+├── yolov5/                    # YOLOv5 源码（参考/C++ 对照）
+├── ultralytics/               # YOLOv8/v10 运行库（vendored）
+├── insightface/               # InsightFace 源码（vendored）
+│   └── python-package/insightface/
+├── HyperLPR/                  # HyperLPR3 源码（vendored）
+│   └── Prj-Python/hyperlpr3/
+├── PaddleOCR/                 # PaddleOCR 源码（参考）
+├── labelImg-master/           # 标注工具
+└── models/
+    ├── insightface/models/buffalo_l/
+    ├── hyperlpr3/
+    └── paddleocr/
 ```
+
+## 无需 pip install 的包
+
+| 包 | 源码路径 | 加载方式 |
+|----|----------|----------|
+| ultralytics | `third_party/ultralytics/` | `bootstrap_env()` → sys.path |
+| hyperlpr3 | `third_party/HyperLPR/Prj-Python/` | sys.path + 模型 `models/hyperlpr3/` |
+| insightface | `third_party/insightface/python-package/` | sys.path + 模型 `models/insightface/` |
 
 ## 一键初始化
 
 ```bash
-# 克隆全部源码 + 迁移/下载人脸模型 + YOLO 源码
 python scripts/setup_third_party.py
-
-# 仅整理模型（不 git clone）
-python scripts/setup_third_party.py --skip-clone --download-face-model
+python scripts/setup_yolo_sources.py
+python scripts/setup_third_party.py --download-hyperlpr-models --download-face-model
+python scripts/check_offline_deps.py
 ```
 
-若 `~/.insightface/models/buffalo_l` 已存在，会自动 **复制** 到 `third_party/models/insightface/models/buffalo_l`。
+## C++ 部署
 
-## 运行时路径（代码自动设置）
+边缘设备 C++ 推理不需要上述 Python 包，直接使用：
 
-| 组件 | 项目内路径 | 说明 |
-|------|------------|------|
-| InsightFace | `third_party/models/insightface/` | `FaceAnalysis(root=...)` |
-| PaddleOCR | `third_party/models/paddleocr/` | 环境变量 `PADDLE_PDX_HOME` |
-| YOLO 预训练 | `weights/pretrained/` | `yolov8n.pt` 等 |
-| Ultralytics 配置 | `.ultralytics/` | 项目根目录 |
+- YOLO：`.onnx` / `.rknn`（见 `deploy/`）
+- 人脸：加载 `models/insightface/models/buffalo_l/*.onnx`（ONNX Runtime）
+- 车牌：HyperLPR C++ 或 HyperLPR3 ONNX
 
-Python 包（`insightface`、`paddleocr`、`ultralytics`）仍通过 **pip 安装** 调用；`third_party/` 下的仓库用于 **阅读源码、移植、离线对照**。模型权重统一落在 `third_party/models/`。
+详见 [deploy/README.md](../deploy/README.md)。
 
-## 与本项目模块对应
+## 运行时环境变量
 
-| 任务 | pip 包 | 源码 | 模型 |
-|------|--------|------|------|
-| 安全帽/车牌/动作 | ultralytics | yolov5 / ultralytics | weights/pretrained + weights/{task}/ |
-| 人脸 | insightface | insightface/ | models/insightface/models/buffalo_l |
-| 车牌 OCR | paddleocr | PaddleOCR/ | models/paddleocr/ |
+| 组件 | 变量 | 目录 |
+|------|------|------|
+| InsightFace | `INSIGHTFACE_HOME` | `models/insightface/` |
+| HyperLPR3 | `HYPERLPR3_HOME` | `models/hyperlpr3/` |
+| PaddleOCR | `PADDLE_PDX_CACHE_HOME` | `models/paddleocr/` |
+| Ultralytics | `YOLO_CONFIG_DIR` | `ultralytics_config/` |
 
 ## License
 
-各上游仓库许可不同（AGPL / Apache 等），商用请分别确认。
+各上游仓库许可不同，商用请分别确认。

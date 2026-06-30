@@ -11,6 +11,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.core.third_party_paths import bootstrap_env
 from src.core.weights import PRETRAINED_DIR, list_pretrained_names
 
 
@@ -19,15 +20,16 @@ def download_one(name: str, dest_dir: Path, force: bool = False) -> str:
     if dest.exists() and not force:
         return f"[skip] {name} 已存在"
 
+    bootstrap_env()
     try:
         from ultralytics.utils.downloads import attempt_download_asset
 
         src = attempt_download_asset(name)
         src_path = Path(src)
         if not src_path.exists():
-            from ultralytics import YOLO
+            from src.core.third_party_paths import import_yolo
 
-            model = YOLO(name)
+            model = import_yolo()(name)
             src_path = Path(getattr(model, "ckpt_path", None) or name)
         shutil.copy2(src_path, dest)
         return f"[ok] {name} -> {dest}"
