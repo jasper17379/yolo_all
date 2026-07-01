@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import sys
 import urllib.request
 from pathlib import Path
 
@@ -24,6 +25,9 @@ import yaml
 from PIL import Image, ImageDraw, ImageFont
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 DATASETS = PROJECT_ROOT / "datasets"
 
 _PLATE_FONT: ImageFont.FreeTypeFont | None = None
@@ -207,8 +211,9 @@ def _draw_preview(
     y2 = int((cy + h / 2) * ih)
     cv2.rectangle(out, (x1, y1), (x2, y2), (0, 0, 255), 2)
     tag = plate_text if plate_text else str(class_id)
-    cv2.putText(out, tag, (x1, max(20, y1 - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-    return out
+    from src.core.cv_draw import put_text_bgr
+
+    return put_text_bgr(out, tag, (x1, max(20, y1 - 5)), (0, 255, 0), font_size=18)
 
 
 def _write_recognition_json(

@@ -1,10 +1,15 @@
 task: action
 type: detection
-description: 人体动作识别(抽烟/打人/跌倒等)
+description: 人体动作识别(抽烟/打人/跌倒/常用手势等)
 classes:
   0: normal
   1: smoking
   2: fighting
   3: falling
+  4: ok
+  5: middle_finger
+  6: thumbs_up
+  7: peace
+  8: fist
 dataset: datasets/action/data.yaml
 default_weights: yolov8n.pt

@@ -1,4 +1,4 @@
-path: .
+path: D:\usual\document\1demo_lib\windows\python\cursor\git\yolo_all\datasets\action
 train: images/train
 val: images/val
 nc: 9

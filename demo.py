@@ -319,21 +319,15 @@ class RealtimeDemo:
 
     @staticmethod
     def _draw_detections(frame: np.ndarray, detections: list[dict]) -> np.ndarray:
-        """
-        在图像上画矩形框和标签。
+        """在图像上画矩形框和标签（中文车牌/姓名用 PIL 绘制）。"""
+        from src.core.cv_draw import draw_label_bgr
 
-        @staticmethod：不依赖 self，可直接 RealtimeDemo._draw_detections(...) 调用
-        frame.copy()：复制一份再画，避免修改原始帧
-        """
         out = frame.copy()
         for d in detections:
             x1, y1, x2, y2 = d["bbox"]
             cv2.rectangle(out, (x1, y1), (x2, y2), BOX_COLOR, 2)
             text = f"{d['task']}:{d['label']} {d['conf']:.2f}"
-            (tw, th), _ = cv2.getTextSize(text, FONT, 0.5, 1)
-            # 文字背景条（实心矩形 -1 表示填充）
-            cv2.rectangle(out, (x1, y1 - th - 6), (x1 + tw, y1), BOX_COLOR, -1)
-            cv2.putText(out, text, (x1, y1 - 4), FONT, 0.5, (255, 255, 255), 1)
+            out = draw_label_bgr(out, text, (x1, y1), box_color_bgr=BOX_COLOR)
         return out
 
     @staticmethod

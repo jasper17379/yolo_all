@@ -1,0 +1,18 @@
+{
+  "classes": {
+    "0": "normal",
+    "1": "smoking",
+    "2": "fighting",
+    "3": "falling",
+    "4": "ok",
+    "5": "middle_finger",
+    "6": "thumbs_up",
+    "7": "peace",
+    "8": "fist"
+  },
+  "real_images": 135,
+  "sources": [
+    "bing",
+    "baidu"
+  ]
+}

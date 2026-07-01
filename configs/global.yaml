@@ -47,7 +47,7 @@ tasks:
     default_weights: yolov8n.pt
   action:
     type: detection
-    classes: [normal, smoking, fighting, falling]
+    classes: [normal, smoking, fighting, falling, ok, middle_finger, thumbs_up, peace, fist]
     default_weights: yolov8n.pt
   face:
     type: recognition
